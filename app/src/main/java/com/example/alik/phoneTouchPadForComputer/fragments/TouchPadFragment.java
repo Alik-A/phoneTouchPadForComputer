@@ -2,18 +2,25 @@ package com.example.alik.phoneTouchPadForComputer.fragments;
 
 import android.content.Context;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
-import com.example.alik.serverclientandroid.R;
+import com.example.alik.phoneTouchPadForComputer.R;
+
+import static android.content.Context.WIFI_SERVICE;
 
 /**
  * A simple {@link Fragment} subclass.
  * Activities that contain this fragment must implement the
- * {@link TouchPadFragment.OnFragmentInteractionListener} interface
+ * {@link TouchPadFragment.OnTouchPadFragmentInteractionListener} interface
  * to handle interaction events.
  * Use the {@link TouchPadFragment#newInstance} factory method to
  * create an instance of this fragment.
@@ -28,7 +35,16 @@ public class TouchPadFragment extends Fragment {
     private String mParam1;
     private String mParam2;
 
-    private OnFragmentInteractionListener mListener;
+    private OnTouchPadFragmentInteractionListener mListener;
+
+    public static int time;
+    private ConnectToServer client;
+    private SendDataToServer sendDataToServer;
+    private View touchPadView;
+    private boolean actionDownProvided;
+    private float lastTouchXLocation;
+    private float lastTouchYLocation;
+    private CountDownTimer countClickTimeThread;
 
     public TouchPadFragment() {
         // Required empty public constructor
@@ -71,19 +87,94 @@ public class TouchPadFragment extends Fragment {
     // TODO: Rename method, update argument and hook method into UI event
     public void onButtonPressed(Uri uri) {
         if (mListener != null) {
-            mListener.onFragmentInteraction(uri);
+            mListener.onTouchPadFragmentInteraction(uri);
         }
     }
 
     @Override
     public void onAttach(Context context) {
         super.onAttach(context);
-        if (context instanceof OnFragmentInteractionListener) {
-            mListener = (OnFragmentInteractionListener) context;
+        if (context instanceof OnTouchPadFragmentInteractionListener) {
+            mListener = (OnTouchPadFragmentInteractionListener) context;
         } else {
             throw new RuntimeException(context.toString()
                     + " must implement OnFragmentInteractionListener");
         }
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        this.client = new ConnectToServer();
+
+        this.countClickTimeThread = new CountDownTimer(3000, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+
+            }
+
+            @Override
+            public void onFinish() {
+                actionDownProvided = false;
+                new SendDataToServer().execute(String.valueOf(TCPClient.RIGHT_CLICK_EVENT));
+            }
+        };
+        WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(WIFI_SERVICE);
+        String ip = "10.100.102.8";
+//        this.client.execute(ip);
+        new ConnectToServer().execute();
+        this.touchPadView = (View) view.findViewById(R.id.view);
+
+        this.touchPadView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                System.out.println("x: " + event.getX() + " y: " + event.getY());
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+
+                        countClickTimeThread.start();
+                        lastTouchXLocation = event.getX();
+                        lastTouchYLocation = event.getY();
+                        actionDownProvided = true;
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+
+                        float currX = event.getX();
+                        float currY = event.getY();
+                        int differenceBetweenX = (int) (currX - lastTouchXLocation);
+                        int differenceBetweenY = (int) (currY - lastTouchYLocation);
+                        if (differenceBetweenX > 100 || differenceBetweenX < -100 || differenceBetweenY > 100 || differenceBetweenY < -100) {
+                            if (actionDownProvided) {
+                                actionDownProvided = false;
+                                countClickTimeThread.cancel();
+                            }
+                            StringBuilder dotsToMove = new StringBuilder();
+                            dotsToMove.append(TCPClient.MOVE_EVENT).append(" ");
+                            dotsToMove.append(differenceBetweenX > 100 ? 1 : differenceBetweenX < -100 ? -1 : 0);
+                            dotsToMove.append(" ").append(differenceBetweenY > 100 ? 1 :
+                                    differenceBetweenY < -100 ? -1 : 0);
+
+                            System.out.println(dotsToMove.toString());
+                            new SendDataToServer().execute(dotsToMove.toString());
+//                        lastTouchXLocation= event.getX();
+//                        lastTouchYLocation= event.getY();
+                        }
+                        break;
+
+                    case MotionEvent.ACTION_UP:
+                        if (actionDownProvided) {
+                            actionDownProvided = false;
+                            countClickTimeThread.cancel();
+                            new SendDataToServer().execute(String.valueOf(TCPClient.LEFT_CLICK_EVENT));
+
+
+                        }
+                }
+                return true;
+            }
+        });
+
     }
 
     @Override
@@ -102,8 +193,8 @@ public class TouchPadFragment extends Fragment {
      * "http://developer.android.com/training/basics/fragments/communicating.html"
      * >Communicating with Other Fragments</a> for more information.
      */
-    public interface OnFragmentInteractionListener {
+    public interface OnTouchPadFragmentInteractionListener {
         // TODO: Update argument type and name
-        void onFragmentInteraction(Uri uri);
+        void onTouchPadFragmentInteraction(Uri uri);
     }
 }

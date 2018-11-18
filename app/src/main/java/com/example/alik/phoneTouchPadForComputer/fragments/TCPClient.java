@@ -1,4 +1,4 @@
-package com.example.alik.phoneTouchPadForComputer;
+package com.example.alik.phoneTouchPadForComputer.fragments;
 
 import android.os.AsyncTask;
 
